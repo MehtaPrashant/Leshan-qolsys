@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Delete 13 resources" deleteContents="false" description="Delete 13 resources" element1="/Apache_Consumer" element10="/leshan-server-cf" element11="/leshan-server-cluster" element12="/leshan-server-core" element13="/leshan-server-demo" element2="/Learning" element3="/leshan-all" element4="/leshan-bsserver-demo" element5="/leshan-client-cf" element6="/leshan-client-core" element7="/leshan-client-demo" element8="/leshan-core" element9="/leshan-integration-tests" flags="7" id="org.eclipse.ltk.core.refactoring.delete.resources" resources="13" stamp="1482758042388"/>
+</session>

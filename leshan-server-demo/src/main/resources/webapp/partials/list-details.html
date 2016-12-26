@@ -1,0 +1,30 @@
+
+ <div>
+ <h3> Client EP: {{clients[0].clientEP}} </h3>
+ </div>
+ 
+<span >
+   
+    
+    
+	<div class="table-responsive" >
+		<table class="table table-striped table-hover table-condensed table-href">
+		<thead>
+			<tr>
+				<th>Events</th>
+				<th>time</th>
+				<th>Delete</th>
+				
+			</tr>
+		</thead>
+		<tbody>
+			<tr ng-repeat="client in clients">
+				<td>{{client.event}}</td>
+				<td>{{client.timestamp}}</td>
+				<td><button class="btn btn-default"><a ng-href="#/delete/{{client.clientEP}}/{{client.event}}">Delete</a></button></td>
+				
+			</tr>
+		</tbody>
+		</table>
+	</div>		
+</span>
