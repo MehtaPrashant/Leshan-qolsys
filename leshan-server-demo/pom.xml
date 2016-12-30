@@ -89,6 +89,11 @@ Contributors:
 		    <artifactId>mongo-java-driver</artifactId>
 		    <version>3.3.0</version>
 		</dependency>
+		<dependency>
+		    <groupId>org.json</groupId>
+		    <artifactId>json</artifactId>
+		    <version>20160810</version>
+		</dependency>
     </dependencies>
     <build>
       <pluginManagement>

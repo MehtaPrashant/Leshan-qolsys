@@ -16,21 +16,40 @@
 package org.eclipse.leshan.server.demo.servlet;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import kafka.consumer.Consumer;
+import kafka.consumer.ConsumerConfig;
+import kafka.consumer.ConsumerIterator;
+import kafka.consumer.KafkaStream;
+import kafka.javaapi.consumer.ConsumerConnector;
+import kafka.message.Message;
+
 import org.apache.commons.lang.StringUtils;
 import org.bson.Document;
 import org.eclipse.leshan.server.model.ClientDao;
+import org.json.JSONObject;
 import org.leshan.server.configuration.DataBaseConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.Properties;
 
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
 import com.google.gson.Gson;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
@@ -52,6 +71,9 @@ public class FetchServlet extends HttpServlet {
     private final String mongoDBAdd = DataBaseConfiguration.getInstance().getPropertyString("MONGODB_ADD");
     private int mongoDBPort = DataBaseConfiguration.getInstance().getPropertyInt("MONGODB_PORT");
     private String mongoDBName = DataBaseConfiguration.getInstance().getPropertyString("MONGODB_DataBaseName");
+    private ConsumerConnector consumerConnector = null;
+    private static Producer<Integer, String> producer;
+    private final String topic = "panelEvents";
 
     /*
      * public FetchServlet(LwM2mServer server, int securePort) { this.server = server;
@@ -62,13 +84,26 @@ public class FetchServlet extends HttpServlet {
      * gsonBuilder.registerTypeHierarchyAdapter(LwM2mNode.class, new LwM2mNodeDeserializer());
      * gsonBuilder.setDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX"); this.gson = gsonBuilder.create(); }
      */
-
+    public String getMessage(Message message) {
+        ByteBuffer buffer = message.payload();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        return new String(bytes);
+    }
     /**
      * {@inheritDoc}
      */
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        Properties props = new Properties();
+        props.put("zookeeper.connect", "localhost:2181");
+        props.put("group.id", "testgroup");
+        props.put("zookeeper.session.timeout.ms", "400");
+        props.put("zookeeper.sync.time.ms", "300");
+        props.put("auto.commit.interval.ms", "1000");
+        ConsumerConfig conConfig = new ConsumerConfig(props);
+        consumerConnector = Consumer.createJavaConsumerConnector(conConfig);
         resp.setContentType("application/json");
         MongoClient client = new MongoClient(mongoDBAdd, mongoDBPort);
         // MongoClient client = new MongoClient("54.161.178.113", 27017);
@@ -122,10 +157,50 @@ public class FetchServlet extends HttpServlet {
                         clientDaoList.add(clientDao);
                     }
 
+//                    String json = gson.toJson(clientDaoList);
+//                    resp.getWriter().write(json.toString());
+//                    resp.setStatus(HttpServletResponse.SC_OK);
+                    
+                    Map<String, Integer> topicCount = new HashMap<String, Integer>();       
+                    topicCount.put(topic, new Integer(1));
+                   
+                    //ConsumerConnector creates the message stream for each topic
+                    Map<String, List<KafkaStream<byte[], byte[]>>> consumerStreams =
+                          consumerConnector.createMessageStreams(topicCount);         
+                   
+                    // Get Kafka stream for topic 'mytopic'
+                    List<KafkaStream<byte[], byte[]>> kStreamList =
+                                                         consumerStreams.get(topic);
+                    // Iterate stream using ConsumerIterator
+                    for (final KafkaStream<byte[], byte[]> kStreams : kStreamList) {
+                           ConsumerIterator<byte[], byte[]> consumerIte = kStreams.iterator();
+                        int count = 0;
+                        while (consumerIte.hasNext()) {
+                            count++;
+
+                            // Shutdown the consumer connector
+                            if (consumerConnector != null && count == 10)
+                                consumerConnector.shutdown();
+                            Message msg = new Message(consumerIte.next().message());
+                            ByteBuffer buffer = msg.payload();
+                            byte[] bytes = new byte[buffer.remaining()];
+                            buffer.get(bytes);
+                            String result = new String(bytes);
+                            JSONObject jsonObj = new JSONObject(result);
+
+                            ClientDao clientDao = new ClientDao();
+                            clientDao.setClientEP(jsonObj.getString("client_ep"));
+                            clientDao.setEvent(jsonObj.getString("event"));
+                            clientDao.setTimestamp(jsonObj.getString("timestamp"));
+                            clientDaoList.add(clientDao);
+
+                        }
+                    }
+
                     String json = gson.toJson(clientDaoList);
                     resp.getWriter().write(json.toString());
                     resp.setStatus(HttpServletResponse.SC_OK);
-
+                    
                 } catch (Exception e) {
                     e.printStackTrace();
                 } finally {
@@ -144,6 +219,21 @@ public class FetchServlet extends HttpServlet {
 
     @Override
     protected void doDelete(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+       String json = "";
+       sendToBroker(topic, json);       
+       BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));               
+       while (true){
+           System.out.print("Enter message to send to kafka broker (Press 'Y' to close producer): ");
+         String msg = null;
+         msg = reader.readLine(); // Read message from console
+         //Define topic name and message
+         KeyedMessage<Integer, String> keyedMsg = new KeyedMessage<Integer, String>(topic, msg);
+         producer.send(keyedMsg); // This publishes message on given topic
+         if("Y".equals(msg)){ break; }
+         System.out.println("--> Message [" + msg + "] sent. Check message on Consumer's program console");
+       }
+       producer.close;
+       
         resp.setContentType("application/json");
 
         @SuppressWarnings("deprecation")
@@ -182,6 +272,20 @@ public class FetchServlet extends HttpServlet {
             resp.getWriter().write("invalid request" + req.getPathInfo());
             resp.setStatus(HttpServletResponse.SC_OK);
         }
+
+    }
+
+    @SuppressWarnings("deprecation")
+    public void sendToBroker(String topic, String msg) {
+
+        Properties producerProps = new Properties();
+        producerProps.put("metadata.broker.list", kafkaBroker1Add + ":" + kafkaBroker1Port);
+        producerProps.put("serializer.class", "kafka.serializer.StringEncoder");
+        producerProps.put("request.required.acks", "1");
+        ProducerConfig producerConfig = new ProducerConfig(producerProps);
+        producer = new Producer<Integer, String>(producerConfig);
+        KeyedMessage<Integer, String> keyedMsg = new KeyedMessage<Integer, String>(topic, msg);
+        producer.send(keyedMsg);
 
     }
 }

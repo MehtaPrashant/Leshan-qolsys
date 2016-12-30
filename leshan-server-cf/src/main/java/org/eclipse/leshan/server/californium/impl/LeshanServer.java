@@ -27,6 +27,10 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
+import kafka.javaapi.producer.Producer;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
+
 import org.bson.Document;
 import org.eclipse.californium.core.CoapResource;
 import org.eclipse.californium.core.CoapServer;
@@ -78,10 +82,6 @@ import com.google.gson.JsonParser;
 import com.mongodb.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
-
-import kafka.javaapi.producer.Producer;
-import kafka.producer.KeyedMessage;
-import kafka.producer.ProducerConfig;
 
 /**
  * A Lightweight M2M server.
@@ -181,7 +181,7 @@ public class LeshanServer implements LwM2mServer {
             @Override
             public void updated(final ClientUpdate update, final Client clientUpdated) {
                 if (!clientUpdated.getFirstUpdate()) {
-                    // observeResource(clientUpdated);
+                    observeResource(clientUpdated);
                     clientUpdated.setFirstUpdate(true);
                 }
             }
